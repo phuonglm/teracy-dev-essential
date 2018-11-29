@@ -47,8 +47,18 @@ module TeracyDevEssential
       def get_default_nic()
         default_interface = ""
         if Vagrant::Util::Platform.windows?
-            default_interface = %x[wmic.exe nic where "NetConnectionStatus=2" get NetConnectionID | more +1]
-            default_interface = default_interface.strip
+            available_interfaces_info = %x[wmic.exe nic where "NetConnectionStatus=2" get DeviceId,NetConnectionID]
+            available_interfaces_info.split("\n")[2..-1].each do |interface_info|
+              matchs = interface_info.scan(/(\d+)[\s\t]+([A-z0-9\s]+)/)
+              if matchs.any?
+                interface_id = matchs[0][0].strip
+                interface_name = matchs[0][1].strip
+                interface_gatewayip = %x[wmic.exe nicconfig where "Index=#{interface_id}" get DefaultIPGateway].split("\n")[2..-1].join.gsub("\n", "").strip
+                if !interface_gatewayip.empty?
+                  default_interface = interface_name
+                end
+              end
+            end
         elsif Vagrant::Util::Platform.linux?
             default_interface = %x[route | grep '^default' | grep -o '[^ ]*$']
             default_interface = default_interface.strip
@@ -59,6 +69,8 @@ module TeracyDevEssential
             extension = nicString.strip == "Wi-Fi" ? " (AirPort)" : ""
             default_interface = default_interface + ': ' + nicString.strip + extension
         end
+        puts default_interface
+        abort
         return default_interface
       end
     end
